@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block title %}Import Data{% endblock %}
+{% block page_title %}Import Data Santri{% endblock %}
+{% block page_desc %}Upload file Excel/CSV untuk import data santri secara massal{% endblock %}
+
+{% block content %}
+<div style="max-width:720px">
+
+  <!-- TEMPLATE DOWNLOAD -->
+  <div class="table-card" style="padding:24px;margin-bottom:20px">
+    <h4 style="font-size:15px;font-weight:700;margin-bottom:8px">📥 Unduh Template</h4>
+    <p class="text-sm text-muted mb-4">Download template Excel sebagai panduan format pengisian data santri.</p>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div class="text-xs text-muted mb-2">Format kolom yang diperlukan:</div>
+      <div class="flex gap-2 flex-wrap">
+        {% for k in ['NIS','Nama Santri','Nama Orang Tua','Alamat','Kelas'] %}
+          <span class="badge badge-blue">{{ k }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    <a href="{{ url_for('impor.template') }}" class="btn btn-primary">📋 Unduh Template Excel</a>
+  </div>
+
+  <!-- UPLOAD FORM -->
+  <div class="table-card" style="padding:24px;margin-bottom:20px">
+    <h4 style="font-size:15px;font-weight:700;margin-bottom:12px">📤 Upload File</h4>
+    <form method="POST" action="{{ url_for('impor.upload') }}" enctype="multipart/form-data" id="uploadForm">
+      <div class="drop-zone" id="dropZone"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('fileInput').click()">
+        <div class="drop-icon">📁</div>
+        <h4>Klik atau drag & drop file di sini</h4>
+        <p>Format: .xlsx, .xls, .csv — Maksimal 5MB</p>
+        <div id="fileName" style="margin-top:8px;font-size:13px;color:var(--accent);display:none"></div>
+      </div>
+      <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv" style="display:none"
+             onchange="showFileName(this)">
+      <div style="margin-top:16px">
+        <button type="submit" class="btn btn-primary">🔍 Preview Data</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- PREVIEW HASIL -->
+  {% if valid is defined %}
+  <div class="table-card" style="padding:24px">
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <h4 style="font-size:15px;font-weight:700">Preview: {{ filename }}</h4>
+      <span class="badge badge-green">✅ {{ valid|length }} valid</span>
+      {% if errors %}<span class="badge badge-red">❌ {{ errors|length }} error</span>{% endif %}
+    </div>
+
+    {% if errors %}
+    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:14px;margin-bottom:16px">
+      <strong style="font-size:13px;color:var(--red)">⚠️ Data bermasalah (tidak akan diimport):</strong>
+      {% for e in errors %}
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">
+          Baris {{ e.baris }}: <code>{{ e.nis or '(kosong)' }}</code> — {{ e.err }}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if valid %}
+    <div style="overflow-x:auto;margin-bottom:16px">
+    <table>
+      <thead><tr><th>#</th><th>NIS</th><th>Nama Santri</th><th>Orang Tua</th><th>Kelas</th></tr></thead>
+      <tbody>
+        {% for r in valid %}
+        <tr>
+          <td class="td-sm">{{ loop.index }}</td>
+          <td><code class="nis-code">{{ r.nis }}</code></td>
+          <td>{{ r.nama }}</td>
+          <td class="td-sm">{{ r.orang_tua or '-' }}</td>
+          <td><span class="badge badge-blue">{{ r.kelas or '-' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    <form method="POST" action="{{ url_for('impor.simpan') }}">
+      <input type="hidden" name="count" value="{{ valid|length }}">
+      {% for r in valid %}
+        <input type="hidden" name="nis_{{ loop.index0 }}"       value="{{ r.nis }}">
+        <input type="hidden" name="nama_{{ loop.index0 }}"      value="{{ r.nama }}">
+        <input type="hidden" name="orang_tua_{{ loop.index0 }}" value="{{ r.orang_tua }}">
+        <input type="hidden" name="alamat_{{ loop.index0 }}"    value="{{ r.alamat }}">
+        <input type="hidden" name="kelas_{{ loop.index0 }}"     value="{{ r.kelas }}">
+      {% endfor %}
+      <button type="submit" class="btn btn-green">
+        💾 Import {{ valid|length }} Santri
+      </button>
+    </form>
+    {% else %}
+    <p style="color:var(--red);font-size:13px">Tidak ada data valid untuk diimport.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showFileName(inp) {
+  const el = document.getElementById('fileName');
+  if (inp.files.length) {
+    el.textContent = '📄 ' + inp.files[0].name;
+    el.style.display = 'block';
+  }
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  const dt = new DataTransfer();
+  dt.items.add(e.dataTransfer.files[0]);
+  document.getElementById('fileInput').files = dt.files;
+  showFileName(document.getElementById('fileInput'));
+}
+</script>
+{% endblock %}

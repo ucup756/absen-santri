@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}Manajemen Acara{% endblock %}
+{% block page_title %}Manajemen Acara{% endblock %}
+{% block page_desc %}Kelola acara dan sesi absensi{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6 flex-wrap gap-3">
+  <div>
+    <h3 style="font-size:18px;font-weight:700">Daftar Acara</h3>
+    <p class="text-sm text-muted mt-1">{{ acara_list|length }} acara terdaftar</p>
+  </div>
+  <div class="flex gap-2 flex-wrap">
+    <form method="GET" class="flex gap-2">
+      <input type="text" name="q" class="search-input" placeholder="🔍 Cari acara..." value="{{ q }}">
+      <button type="submit" class="btn btn-ghost btn-sm">Cari</button>
+      {% if q %}<a href="{{ url_for('acara.index') }}" class="btn btn-ghost btn-sm">✕</a>{% endif %}
+    </form>
+    <button class="btn btn-primary" onclick="openModal('modalTambahAcara')">➕ Tambah Acara</button>
+  </div>
+</div>
+
+{% if acara_list %}
+<div class="events-grid">
+  {% for a in acara_list %}
+  <div class="event-card">
+    <div class="event-card-header">
+      <div>
+        <h4>{{ a.nama }}</h4>
+        <p>{{ a.deskripsi or 'Tidak ada deskripsi' }}</p>
+      </div>
+      <span class="badge {{ 'badge-green' if a.status == 'buka' else 'badge-gray' }}">
+        {{ '🟢 Buka' if a.status == 'buka' else '⭕ Tutup' }}
+      </span>
+    </div>
+    <div class="event-meta">
+      <div class="event-meta-item">📅 {{ a.tanggal.strftime('%d %b %Y') }}</div>
+      <div class="event-meta-item">🕐 {{ a.jam_mulai }}–{{ a.jam_selesai }}</div>
+      <div class="event-meta-item">⏱ Batas: {{ a.batas_terlambat }}</div>
+      <div class="event-meta-item">👥 {{ a.jumlah_hadir() }} hadir</div>
+    </div>
+    <div class="event-actions">
+      <button class="btn btn-ghost btn-sm"
+        onclick="openEditAcara({{ a.id }},'{{ a.nama|e }}',`{{ a.deskripsi|e }}`,
+          '{{ a.tanggal }}','{{ a.jam_mulai }}','{{ a.jam_selesai }}','{{ a.batas_terlambat }}')">
+        ✏️ Edit
+      </button>
+      <a href="{{ url_for('rekap.index', acara_id=a.id) }}" class="btn btn-ghost btn-sm">📋 Rekap</a>
+      <form method="POST" action="{{ url_for('acara.toggle', id=a.id) }}" style="display:inline">
+        <button type="submit" class="btn btn-sm {{ 'btn-danger' if a.status == 'buka' else 'btn-green' }}">
+          {{ '🔒 Tutup' if a.status == 'buka' else '🔓 Buka' }}
+        </button>
+      </form>
+      <form method="POST" action="{{ url_for('acara.hapus', id=a.id) }}" style="display:inline"
+            onsubmit="return confirm('Hapus acara {{ a.nama }}? Semua absensi terkait juga terhapus.')">
+        <button type="submit" class="btn btn-sm btn-danger-soft">🗑</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">📅</div>
+  <h4>Belum ada acara</h4>
+  <p>Klik tombol "Tambah Acara" untuk membuat acara baru</p>
+</div>
+{% endif %}
+
+<!-- ===== MODAL TAMBAH ===== -->
+<div class="modal-overlay hidden" id="modalTambahAcara">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Tambah Acara Baru</h3>
+      <div class="modal-close" onclick="closeModal('modalTambahAcara')">✕</div>
+    </div>
+    <form method="POST" action="{{ url_for('acara.tambah') }}">
+      <div class="form-group">
+        <label>Nama Acara *</label>
+        <input type="text" name="nama" required placeholder="Pengajian Rutin Senin">
+      </div>
+      <div class="form-group">
+        <label>Deskripsi</label>
+        <textarea name="deskripsi" rows="2" placeholder="Deskripsi singkat acara..."></textarea>
+      </div>
+      <div class="col-2">
+        <div class="form-group">
+          <label>Tanggal *</label>
+          <input type="date" name="tanggal" value="{{ today }}" required>
+        </div>
+        <div class="form-group">
+          <label>Batas Terlambat *</label>
+          <input type="time" name="batas_terlambat" required>
+        </div>
+      </div>
+      <div class="col-2">
+        <div class="form-group">
+          <label>Jam Mulai *</label>
+          <input type="time" name="jam_mulai" required>
+        </div>
+        <div class="form-group">
+          <label>Jam Selesai *</label>
+          <input type="time" name="jam_selesai" required>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modalTambahAcara')">Batal</button>
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== MODAL EDIT ===== -->
+<div class="modal-overlay hidden" id="modalEditAcara">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit Acara</h3>
+      <div class="modal-close" onclick="closeModal('modalEditAcara')">✕</div>
+    </div>
+    <form method="POST" id="formEditAcara">
+      <div class="form-group">
+        <label>Nama Acara *</label>
+        <input type="text" name="nama" id="eNama" required>
+      </div>
+      <div class="form-group">
+        <label>Deskripsi</label>
+        <textarea name="deskripsi" id="eDesk" rows="2"></textarea>
+      </div>
+      <div class="col-2">
+        <div class="form-group">
+          <label>Tanggal *</label>
+          <input type="date" name="tanggal" id="eTgl" required>
+        </div>
+        <div class="form-group">
+          <label>Batas Terlambat *</label>
+          <input type="time" name="batas_terlambat" id="eBatas" required>
+        </div>
+      </div>
+      <div class="col-2">
+        <div class="form-group">
+          <label>Jam Mulai *</label>
+          <input type="time" name="jam_mulai" id="eMulai" required>
+        </div>
+        <div class="form-group">
+          <label>Jam Selesai *</label>
+          <input type="time" name="jam_selesai" id="eSelesai" required>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modalEditAcara')">Batal</button>
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditAcara(id, nama, desk, tgl, mulai, selesai, batas) {
+  document.getElementById('formEditAcara').action = '/acara/edit/' + id;
+  document.getElementById('eNama').value   = nama;
+  document.getElementById('eDesk').value   = desk;
+  document.getElementById('eTgl').value    = tgl;
+  document.getElementById('eMulai').value  = mulai;
+  document.getElementById('eSelesai').value= selesai;
+  document.getElementById('eBatas').value  = batas;
+  openModal('modalEditAcara');
+}
+</script>
+{% endblock %}

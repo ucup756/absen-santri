@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+{% block title %}Kartu Santri{% endblock %}
+{% block page_title %}Kartu Santri{% endblock %}
+{% block page_desc %}Generate dan unduh kartu santri berformat foto (PNG){% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6 flex-wrap gap-3">
+  <div>
+    <h3 style="font-size:18px;font-weight:700">Kartu Santri Digital</h3>
+    <p class="text-sm text-muted mt-1">
+      Ukuran kartu: <strong>85.6 × 54 mm</strong> (standar kartu ATM/KTP) · 300 DPI
+    </p>
+  </div>
+  <div class="flex gap-2 flex-wrap">
+    <a id="btnUnduhSemua"
+       href="{{ url_for('kartu.unduh_semua', kelas=kelas) }}"
+       class="btn btn-primary">
+      📦 Unduh ZIP Semua ({{ santri_list|length }})
+    </a>
+    <button class="btn btn-gold" id="btnUnduhPilih"
+            onclick="unduhTerpilih()" style="display:none">
+      ✅ Unduh ZIP Terpilih (<span id="jumlahPilih">0</span>)
+    </button>
+  </div>
+</div>
+
+<!-- INFO BOX -->
+<div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);
+            border-radius:12px;padding:14px 18px;margin-bottom:20px;font-size:13px;
+            display:flex;align-items:flex-start;gap:10px">
+  <span style="font-size:20px;flex-shrink:0">💡</span>
+  <div style="color:var(--text2)">
+    Klik <strong>📦 Unduh ZIP</strong> untuk download semua kartu sekaligus dalam 1 file ZIP.
+    Atau klik <strong>👁 Preview</strong> / <strong>⬇ Unduh</strong> per kartu.
+    Semua kartu berformat <strong>PNG</strong> siap cetak ukuran kartu ATM.
+  </div>
+</div>
+
+<!-- FILTER -->
+<form method="GET" class="filter-row mb-4">
+  <select name="kelas" class="search-input" onchange="this.form.submit()">
+    <option value="">Semua Kelas</option>
+    {% for k in kelas_list %}
+    <option value="{{ k }}" {{ 'selected' if kelas==k }}>{{ k }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" name="q" class="search-input"
+         placeholder="🔍 Cari nama / NIS..." value="{{ q }}"
+         style="min-width:200px">
+  <button type="submit" class="btn btn-primary btn-sm">Cari</button>
+  {% if kelas or q %}
+  <a href="{{ url_for('kartu.index') }}" class="btn btn-ghost btn-sm">✕ Reset</a>
+  {% endif %}
+</form>
+
+<!-- PILIH SEMUA -->
+<div class="flex items-center gap-3 mb-3"
+     style="font-size:13px;color:var(--text2)">
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+    <input type="checkbox" id="checkAll" onchange="toggleAll(this)"
+           style="width:16px;height:16px;accent-color:var(--accent)">
+    Pilih Semua
+  </label>
+  <span id="infoTerpilih" style="color:var(--text3)">0 terpilih</span>
+</div>
+
+<!-- TABEL DAFTAR SANTRI -->
+{% if santri_list %}
+<div class="table-card">
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th style="width:40px">
+        <input type="checkbox" id="checkAllTable" onchange="toggleAll(this)"
+               style="accent-color:var(--accent)">
+      </th>
+      <th>#</th>
+      <th>NIS</th>
+      <th>Nama Santri</th>
+      <th>Kelas</th>
+      <th>Orang Tua</th>
+      <th style="text-align:center">Aksi</th>
+    </tr></thead>
+    <tbody>
+      {% for s in santri_list %}
+      <tr id="row_{{ s.id }}">
+        <td>
+          <input type="checkbox" class="kartu-check" value="{{ s.id }}"
+                 onchange="updatePilihan()"
+                 style="width:16px;height:16px;accent-color:var(--accent)">
+        </td>
+        <td class="td-sm">{{ loop.index }}</td>
+        <td><code class="nis-code">{{ s.nis }}</code></td>
+        <td><strong>{{ s.nama }}</strong></td>
+        <td><span class="badge badge-blue">{{ s.kelas or '-' }}</span></td>
+        <td class="td-sm">{{ s.orang_tua or '-' }}</td>
+        <td>
+          <div class="action-btns" style="justify-content:center">
+            <!-- Preview kartu -->
+            <button class="btn btn-ghost btn-sm"
+                    onclick="previewKartu({{ s.id }}, '{{ s.nama|e }}')"
+                    title="Preview kartu">
+              👁 Preview
+            </button>
+            <!-- Unduh 1 kartu -->
+            <a href="{{ url_for('kartu.unduh', id=s.id) }}"
+               class="btn btn-primary btn-sm" title="Unduh PNG">
+              ⬇ PNG
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="pagination">
+    <span>{{ santri_list|length }} santri</span>
+    <span style="font-size:12px;color:var(--text3)">
+      Semua kartu berukuran 85.6×54mm · 300 DPI
+    </span>
+  </div>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">🪪</div>
+  <h4>Tidak ada santri ditemukan</h4>
+  <p>Coba ubah filter atau tambah data santri terlebih dahulu</p>
+</div>
+{% endif %}
+
+<!-- MODAL PREVIEW KARTU -->
+<div class="modal-overlay hidden" id="modalPreview">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <h3 id="modalPreviewTitle">👁 Preview Kartu</h3>
+      <div class="modal-close" onclick="closeModal('modalPreview')">✕</div>
+    </div>
+
+    <div style="text-align:center">
+      <!-- Loading -->
+      <div id="previewLoading" style="padding:40px;color:var(--text3)">
+        <div style="font-size:32px;margin-bottom:12px">⏳</div>
+        <p>Membuat kartu...</p>
+      </div>
+      <!-- Gambar kartu -->
+      <div id="previewImgWrap" style="display:none">
+        <img id="previewImg" src="" alt="Kartu Santri"
+             style="width:100%;border-radius:8px;
+                    box-shadow:0 4px 20px rgba(0,0,0,.4);
+                    border:1px solid var(--border)">
+        <p style="font-size:11px;color:var(--text3);margin-top:10px">
+          Ukuran asli: 85.6 × 54 mm | 1011 × 638 px | 300 DPI
+        </p>
+      </div>
+    </div>
+
+    <div class="modal-actions" id="previewActions" style="display:none">
+      <button class="btn btn-ghost" onclick="closeModal('modalPreview')">Tutup</button>
+      <a id="btnPreviewUnduh" href="#" class="btn btn-primary">⬇ Unduh PNG</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const selected = new Set();
+
+// ── CHECKBOX ──────────────────────────────────────
+function toggleAll(cb) {
+  document.querySelectorAll('.kartu-check').forEach(c => {
+    c.checked = cb.checked;
+    cb.checked ? selected.add(parseInt(c.value))
+               : selected.delete(parseInt(c.value));
+    document.getElementById('row_'+c.value)
+      ?.style.setProperty('background',
+        cb.checked ? 'rgba(79,142,247,0.06)' : '');
+  });
+  // Sync kedua checkbox "pilih semua"
+  const ca = document.getElementById('checkAll');
+  const ct = document.getElementById('checkAllTable');
+  if (ca) ca.checked = cb.checked;
+  if (ct) ct.checked = cb.checked;
+  updateUI();
+}
+
+function updatePilihan() {
+  selected.clear();
+  document.querySelectorAll('.kartu-check').forEach(c => {
+    if (c.checked) selected.add(parseInt(c.value));
+    document.getElementById('row_'+c.value)
+      ?.style.setProperty('background',
+        c.checked ? 'rgba(79,142,247,0.06)' : '');
+  });
+  updateUI();
+}
+
+function updateUI() {
+  const n    = selected.size;
+  const total = document.querySelectorAll('.kartu-check').length;
+
+  document.getElementById('jumlahPilih').textContent = n;
+  document.getElementById('infoTerpilih').textContent = n + ' terpilih';
+  document.getElementById('btnUnduhPilih').style.display =
+    n > 0 ? 'inline-flex' : 'none';
+  document.getElementById('btnUnduhSemua').style.display =
+    n > 0 ? 'none' : 'inline-flex';
+
+  const ca = document.getElementById('checkAll');
+  const ct = document.getElementById('checkAllTable');
+  const allChecked = n === total && total > 0;
+  if (ca) ca.checked = allChecked;
+  if (ct) ct.checked = allChecked;
+}
+
+// ── UNDUH TERPILIH (ZIP) ─────────────────────────
+function unduhTerpilih() {
+  if (selected.size === 0) return;
+  const params = [...selected].map(id => 'ids=' + id).join('&');
+  window.location.href = '/kartu/unduh-semua?' + params;
+}
+
+// ── PREVIEW KARTU ─────────────────────────────────
+function previewKartu(id, nama) {
+  document.getElementById('modalPreviewTitle').textContent = '👁 Kartu — ' + nama;
+  document.getElementById('previewLoading').style.display  = 'block';
+  document.getElementById('previewImgWrap').style.display  = 'none';
+  document.getElementById('previewActions').style.display  = 'none';
+  openModal('modalPreview');
+
+  const img = new Image();
+  img.onload = () => {
+    document.getElementById('previewImg').src          = img.src;
+    document.getElementById('btnPreviewUnduh').href    = '/kartu/unduh/' + id;
+    document.getElementById('previewLoading').style.display = 'none';
+    document.getElementById('previewImgWrap').style.display = 'block';
+    document.getElementById('previewActions').style.display = 'flex';
+  };
+  img.onerror = () => {
+    document.getElementById('previewLoading').innerHTML =
+      '<p style="color:var(--red)">❌ Gagal memuat kartu. Coba lagi.</p>';
+  };
+  // Tambah timestamp agar tidak cache
+  img.src = '/kartu/preview/' + id + '?t=' + Date.now();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_desc %}Selamat datang di sistem absensi pesantren{% endblock %}
+
+{% block content %}
+<!-- STAT CARDS -->
+<div class="stat-grid">
+  <div class="stat-card blue">
+    <div class="stat-icon blue">👨‍🎓</div>
+    <div class="stat-value">{{ total_santri }}</div>
+    <div class="stat-label">Total Santri</div>
+    <div class="stat-sub">Terdaftar di sistem</div>
+  </div>
+  <div class="stat-card gold">
+    <div class="stat-icon gold">📅</div>
+    <div class="stat-value">{{ total_acara }}</div>
+    <div class="stat-label">Total Acara</div>
+    <div class="stat-sub"><span class="text-green">{{ acara_buka }}</span> sedang buka</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-icon green">✅</div>
+    <div class="stat-value">{{ total_absensi }}</div>
+    <div class="stat-label">Total Absensi</div>
+    <div class="stat-sub"><span class="text-green">{{ pct_tepat }}%</span> tepat waktu</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-icon red">⏰</div>
+    <div class="stat-value">{{ terlambat }}</div>
+    <div class="stat-label">Terlambat</div>
+    <div class="stat-sub">Dari semua acara</div>
+  </div>
+</div>
+
+<!-- ROW 2 -->
+<div class="dashboard-grid mb-6">
+  <!-- Absensi Terbaru -->
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Absensi Terbaru</h3>
+      <a href="{{ url_for('rekap.index') }}" class="btn btn-ghost btn-sm">Lihat Semua →</a>
+    </div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>Santri</th><th>Kelas</th><th>Acara</th><th>Waktu</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        {% for ab in recent %}
+        <tr>
+          <td><strong>{{ ab.santri.nama }}</strong><br><span class="td-sm">{{ ab.santri.nis }}</span></td>
+          <td><span class="badge badge-blue">{{ ab.santri.kelas }}</span></td>
+          <td class="td-sm">{{ ab.acara.nama }}</td>
+          <td class="td-sm">{{ ab.waktu.strftime('%d %b %Y, %H:%M') }}</td>
+          <td>
+            {% if ab.status == 'tepat_waktu' %}
+              <span class="badge badge-green">✅ Tepat Waktu</span>
+            {% else %}
+              <span class="badge badge-orange">⏰ Terlambat</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h4>Belum ada absensi</h4>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- Chart + Progress -->
+  <div class="table-card" style="padding:20px">
+    <h3 class="mb-4" style="font-size:15px;font-weight:700">Kehadiran per Acara</h3>
+    {% if chart_labels %}
+    <div class="chart-bar" id="chartBar">
+      {% set max_val = chart_data | max if chart_data else 1 %}
+      {% for i in range(chart_labels|length) %}
+      {% set pct = ((chart_data[i] / (max_val if max_val > 0 else 1)) * 110)|int %}
+      <div class="chart-bar-item">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">{{ chart_data[i] }}</div>
+        <div class="chart-bar-fill" style="height:{{ pct }}px;min-height:4px"></div>
+        <div class="chart-bar-label" title="{{ chart_labels[i] }}">
+          {{ chart_labels[i][:8] }}{% if chart_labels[i]|length > 8 %}…{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="divider"></div>
+    {% endif %}
+    <div style="font-size:13px">
+      <div class="flex justify-between mb-2">
+        <span style="color:var(--text3)">Tepat Waktu</span>
+        <strong class="text-green">{{ tepat_waktu }}</strong>
+      </div>
+      <div class="progress-bar mb-4">
+        <div class="progress-fill" style="width:{{ pct_tepat }}%;background:linear-gradient(90deg,var(--green),#4ade80)"></div>
+      </div>
+      <div class="flex justify-between mb-2">
+        <span style="color:var(--text3)">Terlambat</span>
+        <strong style="color:var(--orange)">{{ terlambat }}</strong>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:{{ 100 - pct_tepat }}%;background:linear-gradient(90deg,var(--orange),#fb923c)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ROW 3 -->
+<div class="dashboard-grid2">
+  <!-- Acara Aktif -->
+  <div class="table-card" style="padding:20px">
+    <div class="flex justify-between items-center mb-4">
+      <h3 style="font-size:15px;font-weight:700">Acara Aktif</h3>
+      <a href="{{ url_for('acara.index') }}" class="btn btn-ghost btn-sm">Kelola →</a>
+    </div>
+    {% for a in acara_aktif %}
+    <div class="acara-aktif-item">
+      <div class="acara-aktif-icon">📅</div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:14px">{{ a.nama }}</div>
+        <div style="font-size:12px;color:var(--text3)">
+          {{ a.tanggal.strftime('%d %b %Y') }} · {{ a.jam_mulai }}–{{ a.jam_selesai }}
+        </div>
+      </div>
+      <span class="badge badge-green">Buka</span>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:20px 0">
+      <p>Tidak ada acara aktif saat ini</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Santri Terbaru -->
+  <div class="table-card" style="padding:20px">
+    <div class="flex justify-between items-center mb-4">
+      <h3 style="font-size:15px;font-weight:700">Santri Terdaftar</h3>
+      <a href="{{ url_for('santri.index') }}" class="btn btn-ghost btn-sm">Kelola →</a>
+    </div>
+    {% for s in santri_terakhir %}
+    <div class="santri-mini-item">
+      <div class="santri-mini-avatar">{{ s.nama[0] }}</div>
+      <div>
+        <div style="font-weight:600;font-size:13px">{{ s.nama }}</div>
+        <div style="font-size:11px;color:var(--text3)">{{ s.nis }} · {{ s.kelas }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

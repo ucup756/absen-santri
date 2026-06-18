@@ -1,1 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}{{ nama_pesantren }}{% endblock %} — Absensi Santri</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
 
+{% if current_user.is_authenticated %}
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-brand">
+      {% if logo_base64 %}
+        <img src="{{ logo_base64 }}" alt="Logo" class="brand-logo-img">
+      {% else %}
+        <div class="brand-icon">🕌</div>
+      {% endif %}
+      <div>
+        <h2>{{ nama_pesantren }}</h2>
+        <p>{{ tagline }}</p>
+      </div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Menu Utama</div>
+    <a href="{{ url_for('dashboard.index') }}"
+       class="nav-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+      <span class="nav-icon">📊</span> Dashboard
+    </a>
+    <a href="{{ url_for('acara.index') }}"
+       class="nav-item {% if request.blueprint == 'acara' %}active{% endif %}">
+      <span class="nav-icon">📅</span> Manajemen Acara
+      {% if acara_buka_count > 0 %}<span class="nav-badge">{{ acara_buka_count }}</span>{% endif %}
+    </a>
+    <a href="{{ url_for('santri.index') }}"
+       class="nav-item {% if request.blueprint == 'santri' %}active{% endif %}">
+      <span class="nav-icon">👨‍🎓</span> Data Santri
+    </a>
+    <a href="{{ url_for('absensi.index') }}"
+       class="nav-item {% if request.blueprint == 'absensi' %}active{% endif %}">
+      <span class="nav-icon">📱</span> Absensi QR Scan
+    </a>
+    <a href="{{ url_for('rekap.index') }}"
+       class="nav-item {% if request.blueprint == 'rekap' %}active{% endif %}">
+      <span class="nav-icon">📋</span> Rekap Kehadiran
+    </a>
+    <a href="{{ url_for('kartu.index') }}"
+       class="nav-item {% if request.blueprint == 'kartu' %}active{% endif %}">
+      <span class="nav-icon">🪪</span> Kartu Santri
+    </a>
+    <a href="{{ url_for('impor.index') }}"
+       class="nav-item {% if request.blueprint == 'impor' %}active{% endif %}">
+      <span class="nav-icon">📥</span> Import Data
+    </a>
+
+    <div class="nav-section-label" style="margin-top:16px">Pengaturan</div>
+    <a href="{{ url_for('pengaturan.index') }}"
+       class="nav-item {% if request.blueprint == 'pengaturan' %}active{% endif %}">
+      <span class="nav-icon">⚙️</span> Pengaturan Pesantren
+    </a>
+    <a href="{{ url_for('auth.admin_list') }}"
+       class="nav-item {% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">👥</span> Kelola Admin
+    </a>
+    <a href="{{ url_for('auth.ganti_password') }}"
+       class="nav-item {% if request.endpoint == 'auth.ganti_password' %}active{% endif %}">
+      <span class="nav-icon">🔑</span> Ganti Password
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="admin-info">
+      <div class="admin-avatar">👤</div>
+      <div>
+        <h4>{{ current_user.nama }}</h4>
+        <p>Administrator</p>
+      </div>
+      <a href="{{ url_for('auth.logout') }}" class="admin-logout" title="Keluar">🚪</a>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <div>
+        <h2>{% block page_title %}{% endblock %}</h2>
+        <p>{% block page_desc %}{% endblock %}</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-date" id="topbarDate"></span>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for cat, msg in messages %}
+          <div class="flash flash-{{ cat }}">
+            <span>{{ '✅' if cat=='success' else ('❌' if cat=='danger' else ('⚠️' if cat=='warning' else 'ℹ️')) }}</span>
+            {{ msg }}
+            <button class="flash-close" onclick="this.parentElement.remove()">✕</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="content">{% block content %}{% endblock %}</main>
+</div>
+
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+<div class="toast-container" id="toastContainer"></div>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

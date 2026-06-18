@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Pengaturan Pesantren{% endblock %}
+{% block page_title %}Pengaturan Pesantren{% endblock %}
+{% block page_desc %}Atur nama, logo, dan identitas pesantren{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:560px">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('pengaturan.index') }}" enctype="multipart/form-data">
+
+      <!-- Preview logo -->
+      <div style="margin-bottom:20px">
+        <label style="font-weight:600;font-size:14px">Logo Saat Ini</label>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:16px">
+          <div style="width:72px;height:72px;border-radius:12px;border:2px solid var(--border);
+                      display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--surface2)">
+            {% if logo_base64 %}
+              <img src="{{ logo_base64 }}" alt="Logo" style="width:100%;height:100%;object-fit:cover">
+            {% else %}
+              <span style="font-size:36px">🕌</span>
+            {% endif %}
+          </div>
+          <div style="font-size:13px;color:var(--text3)">
+            {% if logo_base64 %}
+              <p>Logo terpasang</p>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px">
+                <input type="checkbox" name="hapus_logo" value="1"> Hapus logo (gunakan emoji)
+              </label>
+            {% else %}
+              <p>Belum ada logo, menggunakan emoji 🕌</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Upload Logo Baru <span style="color:var(--text3);font-size:12px">(PNG/JPG, maks 512 KB)</span></label>
+        <input type="file" name="logo" accept="image/png,image/jpeg,image/gif,image/webp"
+               style="display:block;margin-top:6px;font-size:13px">
+      </div>
+
+      <div class="form-group">
+        <label>Nama Pesantren</label>
+        <input type="text" name="nama_pesantren" value="{{ nama_pesantren }}"
+               placeholder="Contoh: Pondok Pesantren Al-Falah" required>
+      </div>
+
+      <div class="form-group">
+        <label>Tagline / Keterangan</label>
+        <input type="text" name="tagline" value="{{ tagline }}"
+               placeholder="Contoh: Sistem Absensi Santri Digital">
+      </div>
+
+      <div class="form-group">
+        <label>Tahun</label>
+        <input type="text" name="tahun" value="{{ tahun }}"
+               placeholder="Contoh: 2025" style="max-width:160px">
+      </div>
+
+      <!-- Preview sidebar -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+                  padding:14px 18px;margin-bottom:20px;font-size:13px">
+        <p style="font-weight:600;margin-bottom:8px">Preview Sidebar:</p>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:40px;height:40px;border-radius:8px;background:var(--accent);
+                      display:flex;align-items:center;justify-content:center;font-size:20px">
+            {% if logo_base64 %}
+              <img src="{{ logo_base64 }}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">
+            {% else %}🕌{% endif %}
+          </div>
+          <div>
+            <strong id="prevNama">{{ nama_pesantren }}</strong><br>
+            <span style="color:var(--text3)" id="prevTagline">{{ tagline }}</span>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">💾 Simpan Pengaturan</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelector('[name="nama_pesantren"]').addEventListener('input', function() {
+  document.getElementById('prevNama').textContent = this.value || 'Nama Pesantren';
+});
+document.querySelector('[name="tagline"]').addEventListener('input', function() {
+  document.getElementById('prevTagline').textContent = this.value;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,460 @@
+{% extends 'base.html' %}
+{% block title %}Absensi QR Scan{% endblock %}
+{% block page_title %}Absensi QR Scan{% endblock %}
+{% block page_desc %}Scan QR Code santri untuk mencatat kehadiran{% endblock %}
+
+{% block content %}
+<div class="scan-container">
+
+  <!-- PILIH ACARA -->
+  <div class="scan-box">
+    <h3>📱 Absensi via QR Code</h3>
+    <p>Pilih acara aktif lalu scan QR Code santri</p>
+
+    <form method="GET" class="form-group" style="margin-bottom:0">
+      <label>Pilih Acara</label>
+      <select name="acara_id" onchange="this.form.submit()">
+        <option value="">-- Pilih Acara --</option>
+        {% for a in acara_buka %}
+          <option value="{{ a.id }}" {{ 'selected' if selected_id == a.id }}>
+            {{ a.nama }} ({{ a.tanggal.strftime('%d %b %Y') }})
+          </option>
+        {% endfor %}
+        {% for a in acara_semua if a.status == 'tutup' %}
+          <option value="{{ a.id }}" disabled>🔒 {{ a.nama }}</option>
+        {% endfor %}
+      </select>
+    </form>
+
+    {% if not acara_buka %}
+    <div class="alert-box alert-red mt-3">
+      ⚠️ Tidak ada acara buka.
+      <a href="{{ url_for('acara.index') }}" style="color:inherit;font-weight:700">Buka acara dulu →</a>
+    </div>
+    {% endif %}
+
+    {% if selected_id %}
+      {% for a in acara_buka if a.id == selected_id %}
+      <div class="alert-box alert-green mt-3">
+        🟢 <strong>{{ a.nama }}</strong>
+        · Batas terlambat: <strong>{{ a.batas_terlambat }}</strong>
+        · Hadir: <strong id="counterHadir">{{ a.jumlah_hadir() }}</strong> santri
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  {% if selected_id %}
+  <!-- MODE SELECTOR -->
+  <div class="scan-box" style="padding:20px">
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-primary" id="tabKamera" onclick="setMode('kamera')">
+        📷 Scan Kamera Langsung
+      </button>
+      <button class="btn btn-ghost" id="tabFoto" onclick="setMode('foto')">
+        🖼 Foto QR Code
+      </button>
+      <button class="btn btn-ghost" id="tabManual" onclick="setMode('manual')">
+        ⌨️ Ketik NIS Manual
+      </button>
+    </div>
+
+    <!-- ══ MODE 1: KAMERA LANGSUNG (jsQR) ══ -->
+    <div id="modeKamera">
+      <div id="libWarning" style="display:none;background:rgba(240,180,41,.1);
+           border:1px solid rgba(240,180,41,.3);border-radius:10px;padding:12px;
+           font-size:13px;color:var(--gold2);margin-bottom:12px">
+        ⚠️ <strong>Library jsQR belum tersedia.</strong>
+        Jalankan di Termux:<br>
+        <code id="downloadCmd" style="display:block;background:var(--bg);padding:8px;
+              border-radius:6px;margin-top:8px;font-size:12px;word-break:break-all;
+              color:var(--accent2)">bash ~/absen_santri/download_jsqr.sh</code>
+        <button onclick="copyCmd()" class="btn btn-ghost btn-sm" style="margin-top:8px">
+          📋 Copy Perintah
+        </button>
+        <span style="color:var(--text3);font-size:11px;display:block;margin-top:6px">
+          Atau gunakan mode "Foto QR Code" di bawah — tidak butuh jsQR
+        </span>
+      </div>
+
+      <div id="videoWrap" style="display:none;margin-bottom:14px;position:relative">
+        <video id="qr-video" playsinline autoplay muted
+               style="width:100%;border-radius:12px;border:2px solid var(--border);
+                      display:block;max-height:320px;object-fit:cover;background:#000"></video>
+        <canvas id="qr-canvas" style="display:none"></canvas>
+        <!-- Frame -->
+        <div style="position:absolute;inset:0;display:flex;align-items:center;
+                    justify-content:center;pointer-events:none">
+          <div style="width:190px;height:190px;position:relative;
+                      box-shadow:0 0 0 9999px rgba(0,0,0,0.35);border-radius:12px">
+            <div style="position:absolute;inset:0;border:3px solid var(--accent);border-radius:12px"></div>
+            <div style="position:absolute;top:-3px;left:-3px;width:22px;height:22px;
+                        border-top:5px solid #fff;border-left:5px solid #fff;border-radius:4px 0 0 0"></div>
+            <div style="position:absolute;top:-3px;right:-3px;width:22px;height:22px;
+                        border-top:5px solid #fff;border-right:5px solid #fff;border-radius:0 4px 0 0"></div>
+            <div style="position:absolute;bottom:-3px;left:-3px;width:22px;height:22px;
+                        border-bottom:5px solid #fff;border-left:5px solid #fff;border-radius:0 0 0 4px"></div>
+            <div style="position:absolute;bottom:-3px;right:-3px;width:22px;height:22px;
+                        border-bottom:5px solid #fff;border-right:5px solid #fff;border-radius:0 0 4px 0"></div>
+            <div id="scanLine" style="position:absolute;left:6px;right:6px;height:2px;top:10px;
+                 background:linear-gradient(90deg,transparent,#22c55e,transparent);
+                 animation:scanLine 1.8s ease-in-out infinite"></div>
+          </div>
+        </div>
+        <div id="fpsInfo" style="position:absolute;bottom:8px;right:8px;
+             background:rgba(0,0,0,.55);color:#fff;font-size:10px;
+             padding:3px 7px;border-radius:5px"></div>
+      </div>
+
+      <div id="scanResult"></div>
+
+      <div class="flex gap-2 justify-center flex-wrap">
+        <button class="btn btn-primary" id="btnStart" onclick="startKamera()">
+          📷 Aktifkan Kamera
+        </button>
+        <button class="btn btn-danger" id="btnStop" onclick="stopKamera()" style="display:none">
+          ⏹ Stop
+        </button>
+      </div>
+      <p style="font-size:11px;color:var(--text3);margin-top:10px;text-align:center">
+        Gunakan Chrome · Izinkan akses kamera · QR harus dalam kotak hijau
+      </p>
+    </div>
+
+    <!-- ══ MODE 2: FOTO / UPLOAD GAMBAR QR ══ -->
+    <div id="modeFoto" style="display:none">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;text-align:center">
+        Ambil foto QR Code menggunakan kamera HP, sistem akan membaca otomatis.<br>
+        <strong>Mode ini tidak butuh jsQR.js</strong> — diproses di server.
+      </p>
+      <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap">
+        <label class="btn btn-primary" style="cursor:pointer">
+          📸 Buka Kamera HP
+          <input type="file" id="inputFotoKamera" accept="image/*" capture="environment"
+                 style="display:none" onchange="prosesGambarQR(this)">
+        </label>
+        <label class="btn btn-ghost" style="cursor:pointer">
+          🖼 Pilih dari Galeri
+          <input type="file" id="inputFotoGaleri" accept="image/*"
+                 style="display:none" onchange="prosesGambarQR(this)">
+        </label>
+      </div>
+      <div id="fotoPreview" style="margin-top:14px;text-align:center"></div>
+      <div id="fotoResult" style="margin-top:10px"></div>
+    </div>
+
+    <!-- ══ MODE 3: INPUT MANUAL ══ -->
+    <div id="modeManual" style="display:none">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;text-align:center">
+        Ketik NIS santri secara manual
+      </p>
+      <div class="form-group" style="max-width:320px;margin:0 auto">
+        <label>NIS / Kode Santri</label>
+        <input type="text" id="manualNIS" placeholder="Contoh: PST2024001"
+               style="font-size:16px;letter-spacing:1px;text-transform:uppercase"
+               oninput="this.value=this.value.toUpperCase()"
+               onkeydown="if(event.key==='Enter')submitManual()">
+      </div>
+      <div style="text-align:center">
+        <button class="btn btn-primary" onclick="submitManual()">✅ Catat Absensi</button>
+      </div>
+      <div id="manualResult" style="margin-top:14px"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- RIWAYAT ABSENSI -->
+  <div class="scan-box" style="margin-top:16px">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">
+      📋 Absensi Acara Ini
+      (<span id="totalAbsensi">{{ today_abs|length }}</span> orang)
+    </h3>
+    <div id="listAbsensi">
+      {% if today_abs %}
+        {% for ab in today_abs %}
+        <div class="abs-mini-item">
+          <div class="abs-mini-avatar">{{ ab.santri.nama[0] }}</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">{{ ab.santri.nama }}</div>
+            <div style="font-size:11px;color:var(--text3)">
+              {{ ab.santri.kelas }} · {{ ab.waktu.strftime('%H:%M:%S') }}
+            </div>
+          </div>
+          <span class="badge {{ 'badge-green' if ab.status=='tepat_waktu' else 'badge-orange' }}">
+            {{ '✅ Tepat' if ab.status=='tepat_waktu' else '⏰ Terlambat' }}
+          </span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p id="emptyMsg" style="text-align:center;color:var(--text3);font-size:13px;padding:12px">
+          Belum ada absensi
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/jsQR.js') }}"
+        onerror="onJsQRError()"></script>
+
+<script>
+const ACARA_ID = {{ selected_id or 'null' }};
+let scanning   = false;
+let stream     = null;
+let rafId      = null;
+let lastScan   = 0;
+let jsQRReady  = false;
+let currentMode = 'kamera';
+
+// ── CEK LIBRARY ──────────────────────────────────────
+function onJsQRError() { jsQRReady = false; showJsQRWarning(); }
+
+window.addEventListener('load', () => {
+  if (typeof jsQR === 'function') {
+    jsQRReady = true;
+  } else {
+    showJsQRWarning();
+  }
+});
+
+function showJsQRWarning() {
+  const w = document.getElementById('libWarning');
+  if (w) w.style.display = 'block';
+}
+
+function copyCmd() {
+  const cmd = document.getElementById('downloadCmd').textContent;
+  navigator.clipboard.writeText(cmd).then(() => showToast('Perintah berhasil dicopy!', 'success'))
+    .catch(() => showToast('Salin manual: ' + cmd, 'info'));
+}
+
+// ── MODE SWITCHER ─────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  stopKamera();
+  ['kamera','foto','manual'].forEach(m => {
+    document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1)).style.display =
+      m === mode ? 'block' : 'none';
+  });
+  ['tabKamera','tabFoto','tabManual'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const isActive = id === 'tab' + mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.className = isActive ? 'btn btn-primary' : 'btn btn-ghost';
+  });
+}
+
+// ── MODE 1: KAMERA LANGSUNG ───────────────────────────
+function startKamera() {
+  if (!ACARA_ID) { showToast('Pilih acara dulu!', 'error'); return; }
+  if (!jsQRReady) {
+    showToast('jsQR belum ada. Pakai mode Foto atau ketik NIS manual.', 'warning');
+    showJsQRWarning(); return;
+  }
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+  })
+  .then(s => {
+    stream = s;
+    const vid = document.getElementById('qr-video');
+    vid.srcObject = s;
+    vid.onloadedmetadata = () => {
+      vid.play();
+      document.getElementById('videoWrap').style.display = 'block';
+      document.getElementById('btnStart').style.display = 'none';
+      document.getElementById('btnStop').style.display  = 'inline-flex';
+      scanning = true;
+      rafId = requestAnimationFrame(scanTick);
+      showToast('Kamera aktif — arahkan QR ke kotak', 'info');
+    };
+  })
+  .catch(err => {
+    const msg = {
+      NotAllowedError:  'Izin kamera ditolak. Berikan izin di browser.',
+      NotFoundError:    'Kamera tidak ditemukan.',
+      NotReadableError: 'Kamera dipakai aplikasi lain.'
+    }[err.name] || 'Kamera tidak bisa diakses: ' + err.message;
+    showToast(msg, 'error');
+    // Tawarkan mode alternatif
+    setTimeout(() => setMode('foto'), 1500);
+  });
+}
+
+function stopKamera() {
+  scanning = false;
+  cancelAnimationFrame(rafId);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const vid = document.getElementById('qr-video');
+  if (vid) vid.srcObject = null;
+  const vw = document.getElementById('videoWrap');
+  if (vw) vw.style.display = 'none';
+  const bs = document.getElementById('btnStart');
+  const bs2= document.getElementById('btnStop');
+  if (bs)  bs.style.display  = 'inline-flex';
+  if (bs2) bs2.style.display = 'none';
+}
+
+function scanTick(ts) {
+  if (!scanning) return;
+  const vid    = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  if (!vid || vid.readyState < 2 || vid.videoWidth === 0) {
+    rafId = requestAnimationFrame(scanTick); return;
+  }
+  if (canvas.width !== vid.videoWidth) {
+    canvas.width  = vid.videoWidth;
+    canvas.height = vid.videoHeight;
+  }
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+
+  const fps = document.getElementById('fpsInfo');
+  if (fps) fps.textContent = canvas.width + '×' + canvas.height;
+
+  // Cooldown 2.5 detik
+  if (ts - lastScan < 2500) { rafId = requestAnimationFrame(scanTick); return; }
+
+  const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+
+  if (code && code.data.trim()) {
+    lastScan = ts;
+    flashVideo('green');
+    kirimAbsensi(code.data.trim(), 'scanResult');
+  }
+  rafId = requestAnimationFrame(scanTick);
+}
+
+function flashVideo(color) {
+  const vw = document.getElementById('videoWrap');
+  if (!vw) return;
+  vw.style.outline = `4px solid ${color === 'green' ? '#22c55e' : '#ef4444'}`;
+  setTimeout(() => vw.style.outline = 'none', 600);
+}
+
+// ── MODE 2: FOTO QR (diproses server) ────────────────
+function prosesGambarQR(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Preview gambar
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('fotoPreview').innerHTML =
+      `<img src="${e.target.result}" style="max-width:200px;max-height:200px;
+       border-radius:8px;border:2px solid var(--border);margin-bottom:8px">
+       <p style="font-size:12px;color:var(--text3)">Memproses QR Code...</p>`;
+  };
+  reader.readAsDataURL(file);
+
+  // Kirim ke server untuk decode
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('acara_id', ACARA_ID);
+
+  fetch('/absensi/scan-foto', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('fotoPreview').innerHTML =
+        `<img src="${URL.createObjectURL(file)}" style="max-width:200px;max-height:200px;
+         border-radius:8px;border:2px solid var(--border)">`;
+      tampilkanHasil(data, 'fotoResult');
+      if (data.ok) tambahDaftarAbsensi(data);
+      // Reset input agar bisa foto lagi
+      input.value = '';
+    })
+    .catch(() => showToast('Gagal memproses gambar.', 'error'));
+}
+
+// ── MODE 3: MANUAL ────────────────────────────────────
+function submitManual() {
+  const nis = (document.getElementById('manualNIS').value || '').trim().toUpperCase();
+  if (!nis) { showToast('NIS tidak boleh kosong!', 'error'); return; }
+  document.getElementById('manualNIS').value = '';
+  kirimAbsensi(nis, 'manualResult');
+}
+
+// ── KIRIM KE SERVER ───────────────────────────────────
+function kirimAbsensi(nis, resultElId) {
+  fetch('/absensi/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nis, acara_id: ACARA_ID })
+  })
+  .then(r => r.json())
+  .then(data => {
+    tampilkanHasil(data, resultElId);
+    if (data.ok) tambahDaftarAbsensi(data);
+  })
+  .catch(() => showToast('Gagal terhubung ke server.', 'error'));
+}
+
+// ── TAMPILKAN HASIL ───────────────────────────────────
+function tampilkanHasil(data, elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (data.ok) {
+    const late = data.status === 'terlambat';
+    el.innerHTML = `
+      <div style="background:${late?'rgba(249,115,22,.1)':'rgba(34,197,94,.1)'};
+                  border:1px solid ${late?'rgba(249,115,22,.3)':'rgba(34,197,94,.3)'};
+                  border-radius:12px;padding:16px;animation:fadeUp .3s ease">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="font-size:28px">${late?'⏰':'✅'}</div>
+          <div>
+            <div style="font-weight:700;font-size:15px">${late?'Terlambat':'Tepat Waktu'}</div>
+            <div style="font-size:12px;color:var(--text3)">${data.waktu}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+          ${[['Nama',data.santri.nama],['Kelas',data.santri.kelas],
+             ['NIS',data.santri.nis],['Wali',data.santri.orang_tua]].map(([l,v])=>
+            `<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:700">${l}</div>
+                  <div style="font-weight:600;margin-top:2px">${v||'-'}</div></div>`
+          ).join('')}
+        </div>
+      </div>`;
+    showToast(data.santri.nama + ' ✅ absen!', 'success');
+  } else {
+    el.innerHTML = `
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+                  border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px;
+                  animation:fadeUp .3s ease">
+        <div style="font-size:24px">❌</div>
+        <div>
+          <div style="font-weight:700;color:#f87171">Gagal</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${data.pesan}</div>
+        </div>
+      </div>`;
+    showToast(data.pesan, 'error');
+  }
+}
+
+// ── UPDATE DAFTAR ABSENSI ─────────────────────────────
+function tambahDaftarAbsensi(data) {
+  const list  = document.getElementById('listAbsensi');
+  const empty = document.getElementById('emptyMsg');
+  if (empty) empty.remove();
+  const total = document.getElementById('totalAbsensi');
+  if (total) total.textContent = parseInt(total.textContent||0) + 1;
+  const counter = document.getElementById('counterHadir');
+  if (counter) counter.textContent = parseInt(counter.textContent||0) + 1;
+
+  const div = document.createElement('div');
+  div.className = 'abs-mini-item';
+  div.style.animation = 'fadeUp .3s ease';
+  const late = data.status === 'terlambat';
+  div.innerHTML = `
+    <div class="abs-mini-avatar">${data.santri.nama[0]}</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:13px">${data.santri.nama}</div>
+      <div style="font-size:11px;color:var(--text3)">${data.santri.kelas} · ${(data.waktu||'').split(',')[1]?.trim()||'baru'}</div>
+    </div>
+    <span class="badge ${late?'badge-orange':'badge-green'}">${late?'⏰ Terlambat':'✅ Tepat'}</span>`;
+  list.prepend(div);
+}
+</script>
+{% endblock %}

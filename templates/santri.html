@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block title %}Data Santri{% endblock %}
+{% block page_title %}Data Santri{% endblock %}
+{% block page_desc %}Kelola data santri pesantren{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6 flex-wrap gap-3">
+  <div>
+    <h3 style="font-size:18px;font-weight:700">Daftar Santri</h3>
+    <p class="text-sm text-muted mt-1">{{ santri.total }} santri terdaftar</p>
+  </div>
+  <div class="flex gap-2 flex-wrap">
+    <form method="GET" class="flex gap-2">
+      <input type="text" name="q" class="search-input" placeholder="🔍 Cari nama / NIS..." value="{{ q }}">
+      <button type="submit" class="btn btn-ghost btn-sm">Cari</button>
+      {% if q %}<a href="{{ url_for('santri.index') }}" class="btn btn-ghost btn-sm">✕</a>{% endif %}
+    </form>
+    <button class="btn btn-primary" onclick="openModal('modalTambahSantri')">➕ Tambah Santri</button>
+  </div>
+</div>
+
+<div class="table-card">
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th>#</th><th>NIS</th><th>Nama Santri</th><th>Kelas</th><th>Orang Tua</th><th>Alamat</th><th>QR</th><th>Aksi</th>
+    </tr></thead>
+    <tbody>
+      {% for s in santri.items %}
+      <tr>
+        <td class="td-sm">{{ loop.index + (santri.page-1)*santri.per_page }}</td>
+        <td><code class="nis-code">{{ s.nis }}</code></td>
+        <td><strong>{{ s.nama }}</strong></td>
+        <td><span class="badge badge-blue">{{ s.kelas }}</span></td>
+        <td class="td-sm">{{ s.orang_tua or '-' }}</td>
+        <td class="td-sm td-ellipsis" title="{{ s.alamat }}">{{ s.alamat or '-' }}</td>
+        <td>
+          <a href="{{ url_for('santri.qr', id=s.id) }}" class="btn btn-ghost btn-sm btn-icon"
+             onclick="loadQRModal(event, this.href)" title="Lihat QR Code">📱</a>
+        </td>
+        <td>
+          <div class="action-btns">
+            <button class="btn btn-ghost btn-sm"
+              onclick="openEditSantri({{ s.id }},'{{ s.nis }}','{{ s.nama|e }}','{{ s.orang_tua|e }}',`{{ s.alamat|e }}`,'{{ s.kelas }}')">
+              ✏️
+            </button>
+            <form method="POST" action="{{ url_for('santri.hapus', id=s.id) }}"
+                  onsubmit="return confirm('Hapus santri {{ s.nama }}?')">
+              <button type="submit" class="btn btn-sm btn-danger-soft">🗑</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">
+        <div class="empty-state">
+          <div class="empty-icon">👨‍🎓</div>
+          <h4>Tidak ada santri ditemukan</h4>
+          <p>Tambah santri baru atau ubah kata pencarian</p>
+        </div>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if santri.pages > 1 %}
+  <div class="pagination">
+    <span>{{ santri.total }} santri · Halaman {{ santri.page }}/{{ santri.pages }}</span>
+    <div class="page-btns">
+      {% if santri.has_prev %}
+        <a href="{{ url_for('santri.index', page=santri.prev_num, q=q) }}" class="page-btn">‹</a>
+      {% endif %}
+      {% for p in santri.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+          <a href="{{ url_for('santri.index', page=p, q=q) }}"
+             class="page-btn {{ 'active' if p == santri.page }}">{{ p }}</a>
+        {% else %}
+          <span class="page-btn" style="cursor:default">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if santri.has_next %}
+        <a href="{{ url_for('santri.index', page=santri.next_num, q=q) }}" class="page-btn">›</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== MODAL TAMBAH ===== -->
+<div class="modal-overlay hidden" id="modalTambahSantri">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Tambah Santri Baru</h3>
+      <div class="modal-close" onclick="closeModal('modalTambahSantri')">✕</div>
+    </div>
+    <form method="POST" action="{{ url_for('santri.tambah') }}">
+      <div class="col-2">
+        <div class="form-group">
+          <label>NIS / Kode Santri *</label>
+          <input type="text" name="nis" placeholder="PST2024001" required>
+        </div>
+        <div class="form-group">
+          <label>Kelas *</label>
+          <select name="kelas" required>
+            {% for k in kelas_list %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nama Santri *</label>
+        <input type="text" name="nama" required>
+      </div>
+      <div class="form-group">
+        <label>Nama Orang Tua</label>
+        <input type="text" name="orang_tua">
+      </div>
+      <div class="form-group">
+        <label>Alamat</label>
+        <textarea name="alamat" rows="2"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modalTambahSantri')">Batal</button>
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== MODAL EDIT ===== -->
+<div class="modal-overlay hidden" id="modalEditSantri">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Edit Data Santri</h3>
+      <div class="modal-close" onclick="closeModal('modalEditSantri')">✕</div>
+    </div>
+    <form method="POST" id="formEditSantri">
+      <div class="col-2">
+        <div class="form-group">
+          <label>NIS / Kode Santri *</label>
+          <input type="text" name="nis" id="editNis" required>
+        </div>
+        <div class="form-group">
+          <label>Kelas *</label>
+          <select name="kelas" id="editKelas" required>
+            {% for k in kelas_list %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nama Santri *</label>
+        <input type="text" name="nama" id="editNama" required>
+      </div>
+      <div class="form-group">
+        <label>Nama Orang Tua</label>
+        <input type="text" name="orang_tua" id="editOT">
+      </div>
+      <div class="form-group">
+        <label>Alamat</label>
+        <textarea name="alamat" id="editAlamat" rows="2"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modalEditSantri')">Batal</button>
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== MODAL QR ===== -->
+<div class="modal-overlay hidden" id="modalQR">
+  <div class="modal" style="text-align:center">
+    <div class="modal-header">
+      <h3>📱 QR Code Santri</h3>
+      <div class="modal-close" onclick="closeModal('modalQR')">✕</div>
+    </div>
+    <div id="qrContent">Memuat...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditSantri(id, nis, nama, ot, alamat, kelas) {
+  document.getElementById('formEditSantri').action = '/santri/edit/' + id;
+  document.getElementById('editNis').value    = nis;
+  document.getElementById('editNama').value   = nama;
+  document.getElementById('editOT').value     = ot;
+  document.getElementById('editAlamat').value = alamat;
+  document.getElementById('editKelas').value  = kelas;
+  openModal('modalEditSantri');
+}
+function loadQRModal(e, url) {
+  e.preventDefault();
+  fetch(url).then(r => r.text()).then(html => {
+    document.getElementById('qrContent').innerHTML = html;
+    openModal('modalQR');
+  });
+}
+</script>
+{% endblock %}

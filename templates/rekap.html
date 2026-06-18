@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Rekap Kehadiran{% endblock %}
+{% block page_title %}Rekap Kehadiran{% endblock %}
+{% block page_desc %}Lihat dan unduh rekap absensi santri{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6 flex-wrap gap-3">
+  <div>
+    <h3 style="font-size:18px;font-weight:700">Rekap Absensi</h3>
+    <p class="text-sm text-muted mt-1">{{ rows|length }} data ditemukan</p>
+  </div>
+  <div class="flex gap-2 flex-wrap">
+    <a href="{{ url_for('rekap.excel', acara_id=acara_id or '', kelas=kelas, tanggal=tanggal) }}"
+       class="btn btn-green btn-sm">📊 Unduh Excel</a>
+    <a href="{{ url_for('rekap.pdf', acara_id=acara_id or '', kelas=kelas, tanggal=tanggal) }}"
+       class="btn btn-sm" style="background:var(--red);color:white">📄 Unduh PDF</a>
+  </div>
+</div>
+
+<!-- FILTER -->
+<form method="GET" class="filter-row mb-4">
+  <select name="acara_id" class="search-input">
+    <option value="">Semua Acara</option>
+    {% for a in acara_list %}
+    <option value="{{ a.id }}" {{ 'selected' if acara_id == a.id }}>{{ a.nama }}</option>
+    {% endfor %}
+  </select>
+  <select name="kelas" class="search-input">
+    <option value="">Semua Kelas</option>
+    {% for k in kelas_list %}
+    <option value="{{ k }}" {{ 'selected' if kelas == k }}>{{ k }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="tanggal" class="search-input" value="{{ tanggal }}">
+  <button type="submit" class="btn btn-primary btn-sm">🔍 Filter</button>
+  <a href="{{ url_for('rekap.index') }}" class="btn btn-ghost btn-sm">✕ Reset</a>
+</form>
+
+<!-- SUMMARY CARDS -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+  <div class="stat-card blue" style="padding:16px">
+    <div style="font-size:24px;font-weight:800">{{ rows|length }}</div>
+    <div class="stat-label">Total Hadir</div>
+  </div>
+  <div class="stat-card green" style="padding:16px">
+    <div style="font-size:24px;font-weight:800">{{ tepat }}</div>
+    <div class="stat-label">Tepat Waktu</div>
+  </div>
+  <div class="stat-card red" style="padding:16px">
+    <div style="font-size:24px;font-weight:800">{{ terlambat }}</div>
+    <div class="stat-label">Terlambat</div>
+  </div>
+</div>
+
+<div class="table-card">
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th>#</th><th>Nama Santri</th><th>NIS</th><th>Kelas</th><th>Acara</th>
+      <th>Tanggal</th><th>Waktu Absensi</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      {% for ab, s, a in rows %}
+      <tr>
+        <td class="td-sm">{{ loop.index }}</td>
+        <td><strong>{{ s.nama }}</strong></td>
+        <td><code class="nis-code">{{ s.nis }}</code></td>
+        <td><span class="badge badge-blue">{{ s.kelas or '-' }}</span></td>
+        <td class="td-sm">{{ a.nama }}</td>
+        <td class="td-sm">{{ a.tanggal.strftime('%d %b %Y') }}</td>
+        <td class="td-sm">{{ ab.waktu.strftime('%H:%M:%S') }}</td>
+        <td>
+          {% if ab.status == 'tepat_waktu' %}
+            <span class="badge badge-green">✅ Tepat Waktu</span>
+          {% else %}
+            <span class="badge badge-orange">⏰ Terlambat</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h4>Tidak ada data absensi</h4>
+          <p>Coba ubah filter atau lakukan absensi terlebih dahulu</p>
+        </div>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Pagination -->
+{% if pages and pages > 1 %}
+<div class="pagination" style="margin-top:12px">
+  {% if page > 1 %}
+    <a href="?acara_id={{ acara_id or '' }}&kelas={{ kelas }}&tanggal={{ tanggal }}&page={{ page-1 }}" class="btn btn-ghost btn-sm">← Sebelumnya</a>
+  {% endif %}
+  <span style="font-size:13px;color:var(--text3)">Halaman {{ page }} / {{ pages }} &nbsp;·&nbsp; {{ total }} data</span>
+  {% if page < pages %}
+    <a href="?acara_id={{ acara_id or '' }}&kelas={{ kelas }}&tanggal={{ tanggal }}&page={{ page+1 }}" class="btn btn-ghost btn-sm">Berikutnya →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
